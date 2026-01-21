@@ -6,13 +6,21 @@ WORKDIR /app
 
 # requirements.txt 복사 및 설치
 COPY requirements.txt .
+
+# pip 업그레이드
+RUN pip install --no-cache-dir --upgrade pip
+
+# 의존성 설치
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 애플리케이션 코드 복사
 COPY frontend.py .
 
+# 환경 변수 설정
+ENV PYTHONUNBUFFERED=1
+
 # 포트 노출
 EXPOSE 8501
 
 # Streamlit 실행
-CMD ["streamlit", "run", "frontend.py", "--server.address", "0.0.0.0"]
+CMD ["streamlit", "run", "frontend.py", "--server.address", "0.0.0.0", "--server.port", "8501"]

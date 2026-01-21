@@ -3,8 +3,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg  # psycopg3
+from psycopg.rows import dict_row  # psycopg3의 dict_row
 from contextlib import contextmanager
 from functools import lru_cache
 
@@ -24,6 +24,11 @@ ENV = os.getenv("ENV", "development")
 if ENV == "production":
     # Docker 환경 (환경 변수에서 가져옴)
     DATABASE_URL = os.getenv("DATABASE_URL")
+    
+    # Render.com URL 형식 변환 (postgres:// → postgresql://)
+    if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        print("✅ Render.com URL 형식 변환 완료")
 else:
     # 로컬 개발 환경
     DATABASE_URL = "postgresql://postgres:admin123@localhost:5432/movie_db"
@@ -76,7 +81,10 @@ CACHE_DIR = "./model_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 print("🤖 감성 분석 모델 로딩 중...")
-MODEL_NAME = "beomi/KcELECTRA-base-v2022"
+
+# 더 경량화된 모델 선택 (선택사항)
+# MODEL_NAME = "beomi/kcbert-base"  # 110MB (더 가벼움)
+MODEL_NAME = "beomi/KcELECTRA-base-v2022"  # 430MB (원본)
 
 # 토크나이저 로드 (캐싱 적용)
 tokenizer = AutoTokenizer.from_pretrained(
@@ -148,13 +156,14 @@ def analyze_sentiment(text: str) -> float:
     return round(positive_score, 4)
 
 # ========================================
-# 3. 데이터베이스 설정
+# 3. 데이터베이스 설정 (psycopg3)
 # ========================================
 
 @contextmanager
 def get_db_connection():
-    """PostgreSQL 연결 Context Manager"""
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    """PostgreSQL 연결 Context Manager (psycopg3)"""
+    # psycopg3에서는 row_factory 사용
+    conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
     try:
         yield conn
     finally:
@@ -206,7 +215,7 @@ def startup():
             print("✅ 데이터베이스 초기화 완료!")
             break
             
-        except psycopg2.OperationalError as e:
+        except psycopg.OperationalError as e:
             retry_count += 1
             if retry_count >= max_retries:
                 print(f"❌ DB 연결 실패: {e}")
@@ -429,7 +438,7 @@ def read_root():
     return {
         "status": "ok",
         "message": "Movie Review System API",
-        "database": "PostgreSQL",
+        "database": "PostgreSQL + psycopg3",
         "environment": ENV
     }
 
