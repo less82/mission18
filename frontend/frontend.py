@@ -1,8 +1,9 @@
 import streamlit as st
 import requests
+import os
 
 # 백엔드 서버 주소
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 # 페이지 설정
 st.set_page_config(
@@ -10,6 +11,9 @@ st.set_page_config(
     page_icon="🎬",
     layout="wide"
 )
+
+# 디버깅용 (배포 후 삭제)
+st.sidebar.caption(f"🔗 Backend: {BACKEND_URL}")
 
 st.title("🎬 영화 리뷰 시스템")
 

@@ -1,23 +1,38 @@
-# 가상환경 폴더 (이미 잘 하셨어요)
+# Python 캐시
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 가상환경
 venv/
 env/
-.venv/
+ENV/
 
-# 파이썬 캐시 파일 (필수 ⭐)
-__pycache__/
-*.pyc
+# 모델 캐시 (중요!)
+model_cache/
+models--*/
+*.bin
+*.safetensors
 
-# 데이터베이스 파일 (수정됨)
-# movies.db 같은 바이너리 파일은 깃허브에 올리지 않는 것이 원칙입니다.
+# 데이터베이스 (로컬 개발용)
 *.db
 *.sqlite3
+movies.db
 
-# VS Code 설정 폴더
+# Docker 볼륨 데이터
+postgres_data/
+
+# IDE 설정
 .vscode/
+.idea/
+*.swp
+*.swo
 
-# 운영체제 임시 파일 (윈도우/맥)
+# OS 파일
 .DS_Store
 Thumbs.db
 
-# 환경변수/비밀번호 파일 (보안상 중요)
+# 환경 변수 (비밀번호 포함!)
 .env
