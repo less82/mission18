@@ -233,8 +233,9 @@ try:
                 col1, col2, col3 = st.columns([3, 2, 1])
                 
                 with col1:
-                    # 영화 제목이 이미 포함됨!
-                    st.markdown(f"**🎬 {review.get('movie_title', f'영화 ID: {review["movie_id"]}')}**")
+                    # ✅ 수정된 부분
+                    movie_title = review.get('movie_title') or f"영화 ID: {review['movie_id']}"
+                    st.markdown(f"**🎬 {movie_title}**")
                 
                 with col2:
                     sentiment_text, color = display_sentiment(review['sentiment_score'])
