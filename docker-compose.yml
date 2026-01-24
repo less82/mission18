@@ -1,57 +1,48 @@
-version: '3.8'
-
 services:
-  # PostgreSQL 데이터베이스
-  db:
+  postgres:
     image: postgres:15
-    container_name: movie_db
+    container_name: movie_review_db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin123
-      POSTGRES_DB: movie_db
+      POSTGRES_DB: movie_db${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # FastAPI 백엔드
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    container_name: movie_backend
-    environment:
-      DATABASE_URL: postgresql://postgres:admin123@db:5432/movie_db
-      ENV: production
+    image: movie-backend-img  # ✅ 추가: 이미지 이름을 영어로 고정
+    container_name: movie_review_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - model_cache:/app/model_cache
-    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      ENV: production
+    restart: on-failure
 
-  # Streamlit 프론트엔드
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    container_name: movie_frontend
-    environment:
-      BACKEND_URL: http://backend:8000
-    ports:
-      - "8501:8501"
+    image: movie-frontend-img  # ✅ 추가: 이미지 이름을 영어로 고정
+    container_name: movie_review_frontend
     depends_on:
       - backend
-    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      BACKEND_URL: http://backend:8000
+    restart: on-failure
 
-# 데이터 영구 저장용 볼륨
 volumes:
   postgres_data:
-  model_cache:

@@ -3,41 +3,38 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-import psycopg  # psycopg3
-from psycopg.rows import dict_row  # psycopg3의 dict_row
+import psycopg
+from psycopg.rows import dict_row
 from contextlib import contextmanager
-from functools import lru_cache
 
 # 감성 분석 모델
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
+from transformers import pipeline
 
-app = FastAPI()
+app = FastAPI(
+    title="영화 리뷰 시스템 API",
+    description="영화 등록 및 AI 감성 분석 기반 리뷰 시스템",
+    version="1.0.0"
+)
 
 # ========================================
 # 환경 변수 설정
 # ========================================
 
-# 환경 구분
 ENV = os.getenv("ENV", "development")
 
 if ENV == "production":
-    # Docker 환경 (환경 변수에서 가져옴)
     DATABASE_URL = os.getenv("DATABASE_URL")
-    
-    # Render.com URL 형식 변환 (postgres:// → postgresql://)
     if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
         print("✅ Render.com URL 형식 변환 완료")
 else:
-    # 로컬 개발 환경
     DATABASE_URL = "postgresql://postgres:admin123@localhost:5432/movie_db"
 
 print(f"🔧 환경: {ENV}")
 print(f"🗄️ DB 연결: {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'Unknown'}")
 
 # ========================================
-# 1. 데이터 모델 정의
+# 데이터 모델 정의
 # ========================================
 
 class Movie(BaseModel):
@@ -65,7 +62,7 @@ class Review(BaseModel):
     author: str
     content: str
     sentiment_score: Optional[float] = None
-    created_at: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 class ReviewCreate(BaseModel):
     movie_id: int
@@ -73,96 +70,73 @@ class ReviewCreate(BaseModel):
     content: str
 
 # ========================================
-# 2. 감성 분석 모델 로드 + 경량화
+# 감성 분석 모델 로드
 # ========================================
 
-# 캐시 디렉토리 설정
 CACHE_DIR = "./model_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 print("🤖 감성 분석 모델 로딩 중...")
 
-# 더 경량화된 모델 선택 (선택사항)
-# MODEL_NAME = "beomi/kcbert-base"  # 110MB (더 가벼움)
-MODEL_NAME = "beomi/KcELECTRA-base-v2022"  # 430MB (원본)
 
-# 토크나이저 로드 (캐싱 적용)
-tokenizer = AutoTokenizer.from_pretrained(
-    MODEL_NAME,
-    cache_dir=CACHE_DIR
+sentiment_analyzer = pipeline(
+    "sentiment-analysis",
+    model="sangrimlee/bert-base-multilingual-cased-nsmc",  # 한국어 리뷰 학습된 모델
+    model_kwargs={"cache_dir": CACHE_DIR},
+    device=-1
 )
+print("✅ 한국어 감정 분석 모델 로딩 완료!")
 
-# 모델 로드 (캐싱 적용)
-model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_NAME,
-    num_labels=2,
-    cache_dir=CACHE_DIR
-)
 
 # ========================================
-# 모델 경량화 (양자화)
+# 감성 분석 함수
 # ========================================
-print("⚡ 모델 경량화 중...")
-
-if torch.cuda.is_available():
-    # GPU 있으면 Float16으로 변환
-    model = model.half()
-    model = model.cuda()
-    print("✅ GPU 모드 (Float16) - 메모리 50% 절감!")
-else:
-    # CPU에서는 Dynamic Quantization
-    model = torch.quantization.quantize_dynamic(
-        model,
-        {torch.nn.Linear},
-        dtype=torch.qint8
-    )
-    print("✅ CPU 모드 (Int8 Quantization) - 메모리 50% 절감!")
-
-model.eval()
-print("✅ 모델 로딩 완료!")
-
-# ========================================
-# 감성 분석 함수 (캐싱 적용)
-# ========================================
-
-@lru_cache(maxsize=1000)
-def analyze_sentiment_cached(text: str) -> float:
-    """캐싱된 감성 분석"""
-    return analyze_sentiment(text)
 
 def analyze_sentiment(text: str) -> float:
     """
     감성 분석 함수
-    Returns: 0.0 ~ 1.0 (0: 부정, 1: 긍정)
+    
+    Args:
+        text (str): 분석할 리뷰 텍스트
+    
+    Returns:
+        float: 0.0 ~ 1.0 (0: 매우 부정, 1: 매우 긍정)
     """
-    inputs = tokenizer(
-        text, 
-        return_tensors="pt", 
-        truncation=True, 
-        max_length=512, 
-        padding=True
-    )
-    
-    # GPU 사용 시 입력도 GPU로 이동
-    if torch.cuda.is_available():
-        inputs = {k: v.cuda() for k, v in inputs.items()}
-    
-    with torch.no_grad():
-        outputs = model(**inputs)
-        logits = outputs.logits
-        probabilities = torch.softmax(logits, dim=1)
-        positive_score = probabilities[0][1].item()
-    
-    return round(positive_score, 4)
+    try:
+        # 텍스트가 너무 길면 자르기
+        if len(text) > 500:
+            text = text[:500]
+        
+        # 너무 짧은 텍스트 처리
+        if len(text.strip()) < 3:
+            return 0.5
+        
+        result = sentiment_analyzer(text)[0]
+        label = result['label']
+        score = result['score']
+        
+        print(f"📊 AI 분석 - Label: {label}, Confidence: {score:.4f}")
+        
+        # korean 모델: positive/negative
+        if label.lower() == 'positive':
+            sentiment_score = 0.5 + (score * 0.5)
+        else:
+            sentiment_score = 0.5 - (score * 0.5)
+        
+        print(f"✅ 최종 점수: {sentiment_score:.4f}")
+        return round(sentiment_score, 4)
+        
+    except Exception as e:
+        print(f"⚠️ 감성 분석 오류: {e}")
+        return 0.5  # 오류 시 중립값 반환
 
 # ========================================
-# 3. 데이터베이스 설정 (psycopg3)
+# 데이터베이스 설정
 # ========================================
 
 @contextmanager
 def get_db_connection():
-    """PostgreSQL 연결 Context Manager (psycopg3)"""
-    # psycopg3에서는 row_factory 사용
+    """PostgreSQL 연결 Context Manager"""
     conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
     try:
         yield conn
@@ -174,7 +148,6 @@ def startup():
     """앱 시작 시 테이블 생성"""
     print("🔌 데이터베이스 연결 확인 중...")
     
-    # DB 연결 재시도 로직 (Docker 환경에서 필요)
     import time
     max_retries = 5
     retry_count = 0
@@ -213,6 +186,15 @@ def startup():
                 cursor.close()
             
             print("✅ 데이터베이스 초기화 완료!")
+            
+            # 모델 워밍업 (첫 실행 속도 개선)
+            print("🔥 AI 모델 워밍업 중...")
+            test_scores = [
+                analyze_sentiment("이 영화 정말 최고예요! 대박이에요!"),
+                analyze_sentiment("별로예요. 돈 아까워요."),
+                analyze_sentiment("그냥 그래요.")
+            ]
+            print(f"✅ 워밍업 완료! 테스트 점수: {test_scores}")
             break
             
         except psycopg.OperationalError as e:
@@ -224,10 +206,10 @@ def startup():
             time.sleep(2)
 
 # ========================================
-# 4. 영화 API
+# 영화 API
 # ========================================
 
-@app.post("/movies", response_model=Movie)
+@app.post("/movies", response_model=Movie, tags=["영화"])
 def create_movie(movie: Movie):
     """영화 등록"""
     with get_db_connection() as conn:
@@ -245,7 +227,7 @@ def create_movie(movie: Movie):
     
     return movie
 
-@app.get("/movies", response_model=List[MovieWithRating])
+@app.get("/movies", response_model=List[MovieWithRating], tags=["영화"])
 def get_movies():
     """전체 영화 목록 조회"""
     with get_db_connection() as conn:
@@ -272,7 +254,7 @@ def get_movies():
     
     return [dict(row) for row in rows]
 
-@app.get("/movies/{movie_id}", response_model=MovieWithRating)
+@app.get("/movies/{movie_id}", response_model=MovieWithRating, tags=["영화"])
 def get_movie(movie_id: int):
     """특정 영화 상세 조회"""
     with get_db_connection() as conn:
@@ -302,7 +284,7 @@ def get_movie(movie_id: int):
     
     return dict(row)
 
-@app.delete("/movies/{movie_id}")
+@app.delete("/movies/{movie_id}", tags=["영화"])
 def delete_movie(movie_id: int):
     """영화 삭제"""
     with get_db_connection() as conn:
@@ -318,16 +300,15 @@ def delete_movie(movie_id: int):
         conn.commit()
         cursor.close()
     
-    return {"message": "삭제 성공"}
+    return {"message": "영화가 삭제되었습니다.", "status": "success"}
 
 # ========================================
-# 5. 리뷰 API
+# 리뷰 API
 # ========================================
 
-@app.post("/reviews", response_model=Review)
+@app.post("/reviews", response_model=Review, tags=["리뷰"])
 def create_review(review: ReviewCreate):
     """리뷰 등록 + 자동 감성 분석"""
-    
     with get_db_connection() as conn:
         cursor = conn.cursor()
         
@@ -339,8 +320,10 @@ def create_review(review: ReviewCreate):
             if movie is None:
                 raise HTTPException(status_code=404, detail="영화를 찾을 수 없습니다.")
             
-            # 2. 감성 분석 실행 (캐싱!)
-            sentiment_score = analyze_sentiment_cached(review.content)
+            # 2. 감성 분석 실행
+            print(f"\n📊 감성 분석 시작")
+            print(f"리뷰 내용: {review.content[:100]}...")
+            sentiment_score = analyze_sentiment(review.content)
             
             # 3. 리뷰 저장
             cursor.execute('''
@@ -372,7 +355,7 @@ def create_review(review: ReviewCreate):
         finally:
             cursor.close()
 
-@app.get("/reviews", response_model=List[Review])
+@app.get("/reviews", response_model=List[Review], tags=["리뷰"])
 def get_all_reviews(limit: int = 10):
     """최근 리뷰 조회"""
     with get_db_connection() as conn:
@@ -391,9 +374,9 @@ def get_all_reviews(limit: int = 10):
     
     return [dict(row) for row in rows]
 
-@app.get("/movies/{movie_id}/reviews", response_model=List[Review])
+@app.get("/movies/{movie_id}/reviews", response_model=List[Review], tags=["리뷰"])
 def get_movie_reviews(movie_id: int):
-    """특정 영화의 리뷰 조회"""
+    """특정 영화의 전체 리뷰 조회"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         
@@ -410,7 +393,7 @@ def get_movie_reviews(movie_id: int):
     
     return [dict(row) for row in rows]
 
-@app.delete("/reviews/{review_id}")
+@app.delete("/reviews/{review_id}", tags=["리뷰"])
 def delete_review(review_id: int):
     """리뷰 삭제"""
     with get_db_connection() as conn:
@@ -426,25 +409,26 @@ def delete_review(review_id: int):
         conn.commit()
         cursor.close()
     
-    return {"message": "리뷰 삭제 성공"}
+    return {"message": "리뷰가 삭제되었습니다.", "status": "success"}
 
 # ========================================
-# 6. 헬스 체크
+# 헬스 체크
 # ========================================
 
-@app.get("/")
+@app.get("/", tags=["시스템"])
 def read_root():
     """API 상태 확인"""
     return {
         "status": "ok",
-        "message": "Movie Review System API",
+        "message": "영화 리뷰 시스템 API",
         "database": "PostgreSQL + psycopg3",
-        "environment": ENV
+        "environment": ENV,
+        "ai_model": "Multilingual BERT Sentiment (5-star)" if MODEL_TYPE == "5-star" else "DistilBERT Sentiment"
     }
 
-@app.get("/health")
+@app.get("/health", tags=["시스템"])
 def health_check():
-    """데이터베이스 연결 확인"""
+    """데이터베이스 연결 상태 확인"""
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -455,10 +439,12 @@ def health_check():
         return {"status": "unhealthy", "error": str(e)}
 
 # ========================================
-# 7. 실행
+# 실행
 # ========================================
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
+    print(f"🚀 서버 시작: http://localhost:{port}")
+    print(f"📚 API 문서: http://localhost:{port}/docs")
     uvicorn.run(app, host="0.0.0.0", port=port)

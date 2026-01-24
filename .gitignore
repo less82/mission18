@@ -1,38 +1,44 @@
-# Python 캐시
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-
-# 가상환경
-venv/
 env/
+venv/
 ENV/
+*.egg-info/
+dist/
+build/
 
-# 모델 캐시 (중요!)
+# 환경 변수
+.env
+.env.local
+
+# 모델 캐시
 model_cache/
-models--*/
-*.bin
-*.safetensors
+__pycache__/
 
-# 데이터베이스 (로컬 개발용)
-*.db
-*.sqlite3
-movies.db
-
-# Docker 볼륨 데이터
-postgres_data/
-
-# IDE 설정
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS 파일
+# OS
 .DS_Store
 Thumbs.db
 
-# 환경 변수 (비밀번호 포함!)
-.env
+# Docker
+docker-compose.override.yml
+
+# 데이터베이스
+*.db
+*.sqlite
+*.sqlite3
+
+# 로그
+*.log
+
+# Streamlit
+.streamlit/secrets.toml
