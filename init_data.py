@@ -13,21 +13,21 @@ SAMPLE_MOVIES = [
         "release_date": "2010-07-21",
         "director": "크리스토퍼 놀란",
         "genre": "SF, 액션",
-        "poster_url": "https://image.tmdb.org/t/p/original/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg"
+        "poster_url": "https://i.namu.wiki/i/Ehoecj4n6o4A7upM53CJFxfTvAxSNc8EmCmOwNVUjLt-IEMKIHkxldg23LOOyjHTzcF35-jSHI4epg5fEcf3yDBfYHlIp_OaVgmmDjpxR8tY2nsjse9y0CKKv7Vhm2sG9QZQfZVLGyHLHSEc2RGIQQ.webp"
     },
     {
         "title": "기생충",
         "release_date": "2019-05-30",
         "director": "봉준호",
         "genre": "드라마, 스릴러",
-        "poster_url": "https://image.tmdb.org/t/p/original/jSuTH2wyQAp80lVr3d0tQGgHPP.jpg"
+        "poster_url": "https://i.namu.wiki/i/cBlCtId63yHEYu31ByP-3aTP3ePAYJfG1uAq3d5YTAiv-bIN8sFWvlKuIZkgDMs1Ij5d7vihWob-sd_5W04a2Xz9n_RXmMTQhkpWJV95N3Bm2Z3KOSYB5aABOVozKy4zy2Btg83BxZdXYvRe1gKLSw.webp"
     },
     {
         "title": "인터스텔라",
         "release_date": "2014-11-06",
         "director": "크리스토퍼 놀란",
         "genre": "SF, 드라마",
-        "poster_url": "https://image.tmdb.org/t/p/original/gEU2QniL6E8ahDaX06e8q288UL.jpg"
+        "poster_url": "https://i.namu.wiki/i/pAIsEorYuHrbWKU7uy1_J_O3nj_Y6CZgkY3RB9R-ELWqir40x4Bl5HhGC-qQbd90j08Kyke_HeOX-5GtDfk74ONh-O3_iMe2hO7u9rVE4kbCN7CEkIFHoDfuDcEHN22Vy8OW-1Eyb3XuG6CGqALuNA.webp"
     }
 ]
 

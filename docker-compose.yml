@@ -3,7 +3,7 @@ services:
     image: postgres:15
     container_name: movie_review_db
     environment:
-      POSTGRES_DB: movie_db${DB_NAME}
+      POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
@@ -19,7 +19,7 @@ services:
   backend:
     build:
       context: ./backend
-    image: movie-backend-img  # ✅ 추가: 이미지 이름을 영어로 고정
+    image: movie-backend-img # ✅ 추가: 이미지 이름을 영어로 고정
     container_name: movie_review_backend
     depends_on:
       postgres:
@@ -34,7 +34,7 @@ services:
   frontend:
     build:
       context: ./frontend
-    image: movie-frontend-img  # ✅ 추가: 이미지 이름을 영어로 고정
+    image: movie-frontend-img # ✅ 추가: 이미지 이름을 영어로 고정
     container_name: movie_review_frontend
     depends_on:
       - backend
